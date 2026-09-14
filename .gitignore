@@ -1,0 +1,13 @@
+# ملفات النتائج المستخرجة (لا تُرفع للمستودع)
+*.txt
+*.csv
+!requirements.txt
+
+# ملفات النظام
+.DS_Store
+Thumbs.db
+
+# بيئات التطوير
+node_modules/
+.vscode/
+.idea/
