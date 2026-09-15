@@ -74,6 +74,12 @@
 - Document everything: URL + date + screenshot, because content may be deleted.
 - Never create sock-puppet accounts impersonating real people — illegal in most jurisdictions.
 
+> 🚨 **TikTok-specific warning — Profile View History**:
+> TikTok has a *Profile View History* feature. If it is enabled **on both your account and the subject's**, they can see that you visited their profile. Worse: a visit made while the feature was on **stays recorded even if you disable it afterwards**.
+> So, **before** opening the subject's profile (not after):
+> - Browse **logged out** when possible, or use a **dedicated research account** that doesn't identify you.
+> - Check the setting: `Profile ← ☰ ← Settings and privacy ← Privacy ← Profile views`.
+
 ---
 
 ## ⚖️ Reminder

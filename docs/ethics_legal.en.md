@@ -36,13 +36,14 @@ This project is intended exclusively for:
 - This project's scripts run manually inside your browser at a moderate pace, but **compliance is your responsibility**.
 
 ### Data Protection Laws
+- **Saudi PDPL** (Personal Data Protection Law) and the **Anti-Cyber Crime Law**: personal data — even if publicly accessible — is regulated in collection, processing, and publishing; unauthorized access to systems or accounts is a crime.
 - **GDPR** (European Union): personal data — even if public — is regulated in collection, processing, and storage.
 - Local laws in your country (cybercrime, privacy, defamation) also apply to OSINT activities.
 - Practical rule: collect the **minimum necessary**, for a defined purpose, and delete what you don't need.
 
 ### In Digital Forensics
 - Examine devices only with **legal authorization** (personal ownership, court order, or employer authorization under a published policy).
-- Maintain the [chain of custody](digital_forensics.en.md#️⃣-chain-of-custody) or the evidence loses its value.
+- Maintain the [chain of custody](digital_forensics.en.md) or the evidence loses its value.
 
 ---
 
@@ -50,7 +51,7 @@ This project is intended exclusively for:
 
 > Before any action, ask yourself:
 > 1. Do I have a **legal right** to collect this information?
-> 2. Would I be comfortable if the subject knew what I'm doing?
+> 2. Could I **justify every step before a judge or a regulator** if asked?
 > 3. Is the purpose **legitimate and defined**, or just curiosity?
 >
 > If you hesitate on any answer — **stop and consult a legal professional**.

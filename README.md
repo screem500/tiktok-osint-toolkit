@@ -4,7 +4,7 @@
 
 An open-source toolkit for extracting post links from **public** TikTok accounts directly in your browser — no installation required — with educational guides on Open Source Intelligence (OSINT) and digital forensics.
 
-> ⚠️ **Legal notice**: This project is for **educational and research purposes only**, for use on public data or with explicit authorization. Read the [legal & ethical guidelines](docs/ethics_legal.md) before any use.
+> ⚠️ **Legal notice**: This project is for **educational and research purposes only**, for use on public data or with explicit authorization. Read the [legal & ethical guidelines](docs/ethics_legal.en.md) before any use.
 
 ---
 
@@ -18,13 +18,18 @@ tiktok-osint-toolkit/
 ├── CONTRIBUTING.md                    ← دليل المساهمة (عربي)
 ├── CONTRIBUTING.en.md                 ← Contribution guide (English)
 ├── scripts/
-│   ├── tiktok_link_extractor.js       ← Basic script (bilingual comments)
-│   └── tiktok_link_extractor_advanced.js  ← Advanced, CSV + metadata (bilingual)
-└── docs/
-    ├── osint.md / osint.en.md                     ← OSINT guide (AR / EN)
-    ├── digital_forensics.md / .en.md              ← Forensics fundamentals (AR / EN)
-    └── ethics_legal.md / ethics_legal.en.md       ← Legal & ethical guidelines (AR / EN)
+│   ├── tiktok_link_extractor.js       ← Basic script (single source of truth)
+│   └── tiktok_link_extractor_advanced.js  ← Advanced: CSV + timestamps (bilingual)
+├── docs/
+│   ├── osint.md / osint.en.md                     ← OSINT guide (AR / EN)
+│   ├── digital_forensics.md / .en.md              ← Forensics fundamentals (AR / EN)
+│   └── ethics_legal.md / ethics_legal.en.md       ← Legal & ethical guidelines (AR / EN)
+└── social/
+    ├── twitter_thread.md              ← Ready-to-post X thread (AR / EN)
+    └── code_tweet.png                 ← Code image for social posts
 ```
+
+> ⚠️ **Before pasting anything into the Console**: pasting code is the same technique abused by **Self-XSS scams** to steal sessions. The browser may ask you to type `allow pasting` first. Only run code taken **from this official repository**, and read it before running it.
 
 ---
 
@@ -36,37 +41,82 @@ tiktok-osint-toolkit/
 4. Switch to the **Console** tab.
 5. Copy the entire contents of [`scripts/tiktok_link_extractor.js`](scripts/tiktok_link_extractor.js).
 6. Paste it into the console and press `Enter`.
-7. Wait 30 seconds (it auto-scrolls and collects links).
-8. A text file named `tiktok_links.txt` will download, containing all post links (videos and photos).
+7. Wait ~32 seconds (it auto-scrolls and collects links).
+8. A text file named `tiktok_links.txt` will download with the links collected while scrolling.
+
+> 📌 **Coverage note**: the script only collects posts that actually load while scrolling (~20 scrolls in 30 seconds). Large accounts may not be fully covered — use the [advanced version](#-advanced-version), which keeps scrolling until no new content appears.
 
 ### Quick-Copy Code
 
+The block below is **identical** to [`scripts/tiktok_link_extractor.js`](scripts/tiktok_link_extractor.js) — a single source of truth:
+
 ```javascript
-let links=[];
-let timer=setInterval(()=>{
-  document.querySelectorAll('a[href*="/video/"], a[href*="/photo/"]').forEach(a=>{
-    if(a.href && !links.includes(a.href)) links.push(a.href);
-  });
-  window.scrollBy(0,1000);
-},1500);
-setTimeout(()=>{
-  clearInterval(timer);
-  let blob=new Blob([links.join('\n')],{type:'text/plain'});
-  let a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='tiktok_links.txt';
-  a.click();
-  console.log('Extracted '+links.length+' links');
-},30000);
+/**
+ * TikTok Link Extractor — Basic (v1.1.1)
+ * ======================================
+ * Usage: open a public profile → F12 → Console → paste → Enter,
+ *        then wait ~32 seconds — tiktok_links.txt downloads automatically.
+ *
+ * Output: plain URLs, one per line — ready as a yt-dlp batch file.
+ * Notice: public data, educational/research use only.
+ * Arabic guide: README.ar.md
+ */
+(() => {
+  const user = location.pathname.split('/')[1].toLowerCase();
+  if (!user.startsWith('@')) {
+    console.warn('Open a public profile page first.');
+    return;
+  }
+
+  const posts = new Map(); // postId → url (dedupe by post ID, merge URL variants)
+
+  const collect = () => {
+    document
+      .querySelectorAll('a[href*="/video/"], a[href*="/photo/"]')
+      .forEach((a) => {
+        const m = a.href.match(/\/(@[^/?#]+)\/(video|photo)\/(\d+)/);
+        // profile-only filter: reposts from other accounts are excluded
+        if (!m || m[1].toLowerCase() !== user || posts.has(m[3])) return;
+        posts.set(m[3], `https://www.tiktok.com/${m[1]}/${m[2]}/${m[3]}`);
+      });
+  };
+  collect();
+
+  const timer = setInterval(() => {
+    collect();
+    window.scrollBy(0, 1000);
+  }, 1500);
+
+  setTimeout(() => {
+    clearInterval(timer); // stop scrolling first
+    setTimeout(() => {
+      collect(); // final pass — after the last batch has had 2s to load
+
+      const blob = new Blob([[...posts.values()].join('\n')], {
+        type: 'text/plain;charset=utf-8',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'tiktok_links.txt';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      console.log(`Collected ${posts.size} posts → tiktok_links.txt`);
+    }, 2000);
+  }, 30000);
+})();
 ```
+
+📄 **Output**: plain URLs, one per line — the file works directly as a `yt-dlp` batch list. Publish-time extraction lives in the advanced version's CSV.
 
 ### ✅ Why This Method Works
 
-- Runs directly in your browser as if you were the real user.
+- Runs directly in your browser, scrolling at a gentle pace.
 - Requires zero installation.
-- Executes inside your own browser session, so it doesn't interact with external protection systems.
+- Does **not** bypass any protection — it only reads links that are already visible in the page during your own session.
 
-> 🛠️ **Technical note**: The version commonly shared in tutorials has a small bug — calling `clearInterval()` without a timer ID never actually stops the scrolling. The version in this repo is fixed (`clearInterval(timer)`).
+> 🛠️ **Technical notes** (v1.1.1): links are filtered to the profile you're viewing (so the Reposts tab can't mix in other accounts), posts are deduplicated by post ID, and a final collection pass runs after scrolling stops — earlier versions could miss the last-loaded posts.
 
 ---
 
@@ -74,10 +124,13 @@ setTimeout(()=>{
 
 [`scripts/tiktok_link_extractor_advanced.js`](scripts/tiktok_link_extractor_advanced.js) adds:
 
-- ⏹️ **Smart auto-stop** when no new links appear (instead of a fixed timer).
-- 📊 **CSV export** (opens in Excel) alongside the TXT file.
+- ⏹️ **Smart auto-stop** when no new posts appear — keeps scrolling until the profile ends (ideal for large accounts). **Keep the tab visible** while it runs — background tabs pause loading and may trigger an early stop.
+- 📥 **Two files download** (TXT then CSV, ~1s apart): Chrome may ask you to **allow multiple downloads** — approve it or the CSV won't arrive.
+- 🕒 **Publish-time extraction** from each post ID (first 32 bits = Unix timestamp).
+- 📊 **CSV export** (url + timestamp + caption, opens in Excel) alongside a plain-URLs TXT.
+- 🛡️ **CSV-injection hardening**: cells starting with `= + - @` are prefixed with `'`, and quotes/newlines are escaped — captions are attacker-controlled text.
 - 📝 Captures the **post title/caption** with each link when available.
-- 🛡️ A 5-minute safety timeout to prevent infinite scrolling.
+- ⏱️ A 5-minute safety timeout to prevent infinite scrolling.
 
 ---
 

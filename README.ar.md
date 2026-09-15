@@ -18,13 +18,18 @@ tiktok-osint-toolkit/
 ├── CONTRIBUTING.md                    ← دليل المساهمة (عربي)
 ├── CONTRIBUTING.en.md                 ← Contribution guide (English)
 ├── scripts/
-│   ├── tiktok_link_extractor.js       ← السكربت الأساسي (تعليقات ثنائية اللغة)
-│   └── tiktok_link_extractor_advanced.js  ← نسخة متقدمة (CSV + بيانات وصفية)
-└── docs/
-    ├── osint.md / osint.en.md                     ← دليل OSINT (عربي / إنجليزي)
-    ├── digital_forensics.md / .en.md              ← التحقيق الجنائي (عربي / إنجليزي)
-    └── ethics_legal.md / ethics_legal.en.md       ← الإرشادات القانونية (عربي / إنجليزي)
+│   ├── tiktok_link_extractor.js       ← السكربت الأساسي (المصدر الموحد للكود)
+│   └── tiktok_link_extractor_advanced.js  ← نسخة متقدمة (CSV + توقيت النشر)
+├── docs/
+│   ├── osint.md / osint.en.md                     ← دليل OSINT (عربي / إنجليزي)
+│   ├── digital_forensics.md / .en.md              ← التحقيق الجنائي (عربي / إنجليزي)
+│   └── ethics_legal.md / ethics_legal.en.md       ← الإرشادات القانونية (عربي / إنجليزي)
+└── social/
+    ├── twitter_thread.md              ← نصوص جاهزة للنشر على X (عربي / إنجليزي)
+    └── code_tweet.png                 ← صورة الكود للمنشورات
 ```
+
+> ⚠️ **قبل لصق أي كود في Console**: لصق الأكواد هو نفس أسلوب احتيال **Self-XSS** الذي تُسرق به الجلسات. قد يطلب منك المتصفح كتابة `allow pasting` أول مرة. لا تشغّل إلا كودًا مأخوذًا **من هذا المستودع الرسمي**، واقرأه قبل التشغيل.
 
 ---
 
@@ -36,37 +41,82 @@ tiktok-osint-toolkit/
 4. اذهب إلى تبويب **Console** (وحدة التحكم).
 5. انسخ محتوى ملف [`scripts/tiktok_link_extractor.js`](scripts/tiktok_link_extractor.js) بالكامل.
 6. الصقه في وحدة التحكم واضغط `Enter`.
-7. انتظر 30 ثانية (سيقوم بالتمرير التلقائي وجمع الروابط).
-8. سيتم تحميل ملف نصي باسم `tiktok_links.txt` يحتوي على جميع روابط المنشورات (فيديوهات وصور).
+7. انتظر ~32 ثانية (سيقوم بالتمرير التلقائي وجمع الروابط).
+8. سيتم تحميل ملف نصي باسم `tiktok_links.txt` بالروابط التي جُمعت أثناء التمرير.
+
+> 📌 **ملاحظة التغطية**: السكربت يجمع فقط المنشورات التي تُحمَّل فعليًا أثناء التمرير (نحو 20 تمريرة في 30 ثانية)، فقد لا تُغطى الحسابات الكبيرة كاملة — استخدم [النسخة المتقدمة](#-النسخة-المتقدمة) التي تستمر حتى نهاية الحساب.
 
 ### الكود (نسخة سريعة)
 
+الكتلة أدناه **مطابقة حرفيًا** لملف [`scripts/tiktok_link_extractor.js`](scripts/tiktok_link_extractor.js) — مصدر واحد للحقيقة:
+
 ```javascript
-let links=[];
-let timer=setInterval(()=>{
-  document.querySelectorAll('a[href*="/video/"], a[href*="/photo/"]').forEach(a=>{
-    if(a.href && !links.includes(a.href)) links.push(a.href);
-  });
-  window.scrollBy(0,1000);
-},1500);
-setTimeout(()=>{
-  clearInterval(timer);
-  let blob=new Blob([links.join('\n')],{type:'text/plain'});
-  let a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='tiktok_links.txt';
-  a.click();
-  console.log('تم استخراج '+links.length+' رابط');
-},30000);
+/**
+ * TikTok Link Extractor — Basic (v1.1.1)
+ * ======================================
+ * Usage: open a public profile → F12 → Console → paste → Enter,
+ *        then wait ~32 seconds — tiktok_links.txt downloads automatically.
+ *
+ * Output: plain URLs, one per line — ready as a yt-dlp batch file.
+ * Notice: public data, educational/research use only.
+ * Arabic guide: README.ar.md
+ */
+(() => {
+  const user = location.pathname.split('/')[1].toLowerCase();
+  if (!user.startsWith('@')) {
+    console.warn('Open a public profile page first.');
+    return;
+  }
+
+  const posts = new Map(); // postId → url (dedupe by post ID, merge URL variants)
+
+  const collect = () => {
+    document
+      .querySelectorAll('a[href*="/video/"], a[href*="/photo/"]')
+      .forEach((a) => {
+        const m = a.href.match(/\/(@[^/?#]+)\/(video|photo)\/(\d+)/);
+        // profile-only filter: reposts from other accounts are excluded
+        if (!m || m[1].toLowerCase() !== user || posts.has(m[3])) return;
+        posts.set(m[3], `https://www.tiktok.com/${m[1]}/${m[2]}/${m[3]}`);
+      });
+  };
+  collect();
+
+  const timer = setInterval(() => {
+    collect();
+    window.scrollBy(0, 1000);
+  }, 1500);
+
+  setTimeout(() => {
+    clearInterval(timer); // stop scrolling first
+    setTimeout(() => {
+      collect(); // final pass — after the last batch has had 2s to load
+
+      const blob = new Blob([[...posts.values()].join('\n')], {
+        type: 'text/plain;charset=utf-8',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'tiktok_links.txt';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      console.log(`Collected ${posts.size} posts → tiktok_links.txt`);
+    }, 2000);
+  }, 30000);
+})();
 ```
+
+📄 **المخرجات**: روابط صافية، رابط في كل سطر — الملف يعمل مباشرة كقائمة batch مع `yt-dlp`. استخراج توقيت النشر موجود في CSV النسخة المتقدمة.
 
 ### ✅ لماذا هذه الطريقة ناجحة؟
 
-- تعمل مباشرة من متصفحك كما لو كنت أنت المستخدم الحقيقي.
+- تعمل مباشرة من متصفحك، وتتصفح بوتيرة هادئة كالمستخدم العادي.
 - لا تحتاج إلى تثبيت أي شيء.
-- تعمل داخل جلسة المتصفح نفسها، فلا تتعامل مع أنظمة الحماية الخارجية.
+- **لا تتجاوز أي حماية** — فهي تقرأ فقط الروابط الظاهرة أصلًا في الصفحة خلال جلستك.
 
-> 🛠️ **ملاحظة تقنية**: الكود المتداول في الشروحات يحتوي خطأً صغيرًا — `clearInterval()` بدون معرف المؤقّت لا يوقف التمرير فعليًا. النسخة أعلاه في هذا المشروع مصحّحة (`clearInterval(timer)`).
+> 🛠️ **ملاحظات تقنية** (v1.1.1): الروابط تُفلتر على حساب الصفحة فقط (فلا تختلط بها منشورات تبويب إعادة النشر)، ويُمنع التكرار على رقم المنشور، وتُنفَّذ جولة جمع أخيرة بعد توقف التمرير — النسخ السابقة كانت تُفوّت آخر المنشورات المحمّلة.
 
 ---
 
@@ -74,10 +124,13 @@ setTimeout(()=>{
 
 ملف [`scripts/tiktok_link_extractor_advanced.js`](scripts/tiktok_link_extractor_advanced.js) يقدّم:
 
-- ⏹️ **إيقاف تلقائي ذكي** عند التوقف عن العثور على روابط جديدة (بدلاً من وقت ثابت).
-- 📊 **تصدير CSV** (يمكن فتحه في Excel) بالإضافة إلى ملف TXT.
+- ⏹️ **إيقاف تلقائي ذكي**: تستمر بالتمرير حتى نهاية الحساب (مثالية للحسابات الكبيرة). **أبقِ التبويب ظاهرًا أمامك** أثناء العمل — التبويبات الخلفية توقف التحميل وقد تسبب إيقافًا مبكرًا.
+- 📥 **ينزّل ملفين** (TXT ثم CSV بفارق ثانية): قد يطلب كروم **السماح بتنزيل ملفات متعددة** — وافق وإلا لن يصلك ملف CSV.
+- 🕒 **استخراج وقت نشر** كل منشور من معرّفه (أول 32 بت = طابع Unix).
+- 📊 **تصدير CSV** (رابط + توقيت + وصف، يُفتح في Excel) بالإضافة إلى ملف TXT بروابط صافية.
+- 🛡️ **تحصين CSV Injection**: أي خلية تبدأ بـ `= + - @` تُسبق بعلامة `'`، مع تهريب التنصيص والأسطر — فالوصف نص يكتبه صاحب الحساب ولا يُؤمَن.
 - 📝 التقاط **عنوان/وصف المنشور** مع كل رابط عند توفّره.
-- 🛡️ مهلة أمان قصوى (5 دقائق) لمنع التمرير اللانهائي.
+- ⏱️ مهلة أمان قصوى (5 دقائق) لمنع التمرير اللانهائي.
 
 ---
 
