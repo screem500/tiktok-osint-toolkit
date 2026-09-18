@@ -19,7 +19,7 @@ tiktok-osint-toolkit/
 ├── CONTRIBUTING.en.md                 ← Contribution guide (English)
 ├── scripts/
 │   ├── tiktok_link_extractor.js       ← Basic script (single source of truth)
-│   └── tiktok_link_extractor_advanced.js  ← Advanced: CSV + timestamps (bilingual)
+│   └── tiktok_link_extractor_advanced.js  ← Advanced: CSV (caption/author/sound) + timestamps
 ├── docs/
 │   ├── osint.md / osint.en.md                     ← OSINT guide (AR / EN)
 │   ├── digital_forensics.md / .en.md              ← Forensics fundamentals (AR / EN)
@@ -42,7 +42,7 @@ tiktok-osint-toolkit/
 5. Copy the entire contents of [`scripts/tiktok_link_extractor.js`](scripts/tiktok_link_extractor.js).
 6. Paste it into the console and press `Enter`.
 7. Wait ~32 seconds (it auto-scrolls and collects links).
-8. A text file named `tiktok_links.txt` will download with the links collected while scrolling.
+8. A text file downloads automatically, named after the account and the UTC collection time — e.g. `tiktok_username_2026-09-18_1305.txt`.
 
 > 📌 **Coverage note**: the script only collects posts that actually load while scrolling (~20 scrolls in 30 seconds). Large accounts may not be fully covered — use the [advanced version](#-advanced-version), which keeps scrolling until no new content appears.
 
@@ -52,12 +52,15 @@ The block below is **identical** to [`scripts/tiktok_link_extractor.js`](scripts
 
 ```javascript
 /**
- * TikTok Link Extractor — Basic (v1.1.1)
+ * TikTok Link Extractor — Basic (v1.2.0)
  * ======================================
  * Usage: open a public profile → F12 → Console → paste → Enter,
- *        then wait ~32 seconds — tiktok_links.txt downloads automatically.
+ *        then wait ~32 seconds — the .txt file downloads automatically.
  *
  * Output: plain URLs, one per line — ready as a yt-dlp batch file.
+ *         The file name carries the account and the UTC collection time,
+ *         e.g. tiktok_username_2026-09-18_1305.txt
+ *
  * Notice: public data, educational/research use only.
  * Arabic guide: README.ar.md
  */
@@ -68,7 +71,13 @@ The block below is **identical** to [`scripts/tiktok_link_extractor.js`](scripts
     return;
   }
 
-  const posts = new Map(); // postId → url (dedupe by post ID, merge URL variants)
+  const posts = new Map(); // postId → url (dedupe by ID, merge URL variants)
+
+  // file name = account + UTC collection time (no more tiktok_links(2).txt)
+  const iso = new Date().toISOString();
+  const stamp = `${iso.slice(0, 10)}_${iso.slice(11, 16).replace(':', '')}`;
+  const safeUser = user.slice(1).replace(/[^\w.-]/g, '_');
+  const fileName = `tiktok_${safeUser}_${stamp}.txt`;
 
   const collect = () => {
     document
@@ -98,17 +107,17 @@ The block below is **identical** to [`scripts/tiktok_link_extractor.js`](scripts
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'tiktok_links.txt';
+      a.download = fileName;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-      console.log(`Collected ${posts.size} posts → tiktok_links.txt`);
+      console.log(`Collected ${posts.size} posts → ${fileName}`);
     }, 2000);
   }, 30000);
 })();
 ```
 
-📄 **Output**: plain URLs, one per line — the file works directly as a `yt-dlp` batch list. Publish-time extraction lives in the advanced version's CSV.
+📄 **Output**: plain URLs, one per line — the file works directly as a `yt-dlp` batch list. The file name carries the account and the UTC collection time, so repeated runs never overwrite each other and every file says which account it came from. Publish-time extraction lives in the advanced version's CSV.
 
 ### ✅ Why This Method Works
 
@@ -116,7 +125,7 @@ The block below is **identical** to [`scripts/tiktok_link_extractor.js`](scripts
 - Requires zero installation.
 - Does **not** bypass any protection — it only reads links that are already visible in the page during your own session.
 
-> 🛠️ **Technical notes** (v1.1.1): links are filtered to the profile you're viewing (so the Reposts tab can't mix in other accounts), posts are deduplicated by post ID, and a final collection pass runs after scrolling stops — earlier versions could miss the last-loaded posts.
+> 🛠️ **Technical notes** (v1.2.0): links are filtered to the profile you're viewing (so the Reposts tab can't mix in other accounts), posts are deduplicated by post ID, and a final collection pass runs after scrolling stops — earlier versions could miss the last-loaded posts. Output files are named `tiktok_<account>_<UTC date>_<HHMM>`.
 
 ---
 
@@ -127,10 +136,34 @@ The block below is **identical** to [`scripts/tiktok_link_extractor.js`](scripts
 - ⏹️ **Smart auto-stop** when no new posts appear — keeps scrolling until the profile ends (ideal for large accounts). **Keep the tab visible** while it runs — background tabs pause loading and may trigger an early stop.
 - 📥 **Two files download** (TXT then CSV, ~1s apart): Chrome may ask you to **allow multiple downloads** — approve it or the CSV won't arrive.
 - 🕒 **Publish-time extraction** from each post ID (first 32 bits = Unix timestamp).
-- 📊 **CSV export** (url + timestamp + caption, opens in Excel) alongside a plain-URLs TXT.
+- 📊 **CSV export** — columns: `url, created, caption, author, sound, alt_raw` (opens in Excel) alongside a plain-URLs TXT.
+- 📁 **Self-describing file names**: `tiktok_<account>_<UTC date>_<HHMM>.txt` / `.csv` — no more `tiktok_links(2).txt`.
 - 🛡️ **CSV-injection hardening**: cells starting with `= + - @` are prefixed with `'`, and quotes/newlines are escaped — captions are attacker-controlled text.
 - 📝 Captures the **post title/caption** with each link when available.
 - ⏱️ A 5-minute safety timeout to prevent infinite scrolling.
+
+### 📄 Sample Output
+
+TikTok keeps the caption inside the thumbnail's `alt` text, in the form
+`<caption> created by <author> with <sound>`. The advanced script splits that into
+separate columns and stores the untouched original in `alt_raw`:
+
+```csv
+url,created,caption,author,sound,alt_raw
+"https://www.tiktok.com/@example/video/7474502610695851270","2025-02-23T06:47:33.000Z","Desert sunrise #travel","Example User","Example User's original sound","Desert sunrise #travel created by Example User with Example User's original sound"
+"https://www.tiktok.com/@example/video/7443881082975440146","2024-12-02T18:20:23.000Z","","Example User","Example User's original sound","created by Example User with Example User's original sound"
+```
+
+An empty `caption` means the post has no description. All timestamps are **UTC**,
+and `alt_raw` is kept unchanged so the split can always be verified against the
+original text.
+
+The TXT file next to it stays plain URLs, one per line:
+
+```text
+https://www.tiktok.com/@example/video/7474502610695851270
+https://www.tiktok.com/@example/video/7443881082975440146
+```
 
 ---
 
