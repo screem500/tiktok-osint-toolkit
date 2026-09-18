@@ -31,7 +31,7 @@ Ready-to-post promo material — Arabic + English.
 1️⃣ افتح صفحة الحساب في كروم أو فايرفوكس
 2️⃣ اضغط F12 ← تبويب Console
 3️⃣ الصق الكود واضغط Enter
-4️⃣ انتظر ~32 ثانية — سيتم تنزيل tiktok_links.txt
+4️⃣ انتظر ~32 ثانية — سيتم تنزيل ملف نصي باسم الحساب وتاريخ الجمع
 
 📌 يجمع الكود الروابط الظاهرة في الصفحة أثناء التمرير؛ الحسابات الكبيرة تحتاج وقتًا أطول، ولا يضمن استخراج كل المنشورات.
 ```
@@ -44,19 +44,22 @@ Ready-to-post promo material — Arabic + English.
 ⚖️ الأداة للبيانات العامة والاستخدام المشروع فقط — التفاصيل في ملف الإرشادات القانونية داخل المستودع.
 ```
 
-### كود الرد (يُنشر كصورة أو في منشور طويل) — نسخة v1.1.1
+### كود الرد (يُنشر كصورة أو في منشور طويل) — نسخة v1.2.0
 
 > الكود أدناه مطابق حرفيًا لملف `scripts/tiktok_link_extractor.js` في المستودع.
 > صورة `code_tweet.png` مولّدة من هذه النسخة.
 
 ```javascript
 /**
- * TikTok Link Extractor — Basic (v1.1.1)
+ * TikTok Link Extractor — Basic (v1.2.0)
  * ======================================
  * Usage: open a public profile → F12 → Console → paste → Enter,
- *        then wait ~32 seconds — tiktok_links.txt downloads automatically.
+ *        then wait ~32 seconds — the .txt file downloads automatically.
  *
  * Output: plain URLs, one per line — ready as a yt-dlp batch file.
+ *         The file name carries the account and the UTC collection time,
+ *         e.g. tiktok_username_2026-09-18_1305.txt
+ *
  * Notice: public data, educational/research use only.
  * Arabic guide: README.ar.md
  */
@@ -67,7 +70,13 @@ Ready-to-post promo material — Arabic + English.
     return;
   }
 
-  const posts = new Map(); // postId → url (dedupe by post ID, merge URL variants)
+  const posts = new Map(); // postId → url (dedupe by ID, merge URL variants)
+
+  // file name = account + UTC collection time (no more tiktok_links(2).txt)
+  const iso = new Date().toISOString();
+  const stamp = `${iso.slice(0, 10)}_${iso.slice(11, 16).replace(':', '')}`;
+  const safeUser = user.slice(1).replace(/[^\w.-]/g, '_');
+  const fileName = `tiktok_${safeUser}_${stamp}.txt`;
 
   const collect = () => {
     document
@@ -97,11 +106,11 @@ Ready-to-post promo material — Arabic + English.
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'tiktok_links.txt';
+      a.download = fileName;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-      console.log(`Collected ${posts.size} posts → tiktok_links.txt`);
+      console.log(`Collected ${posts.size} posts → ${fileName}`);
     }, 2000);
   }, 30000);
 })();
@@ -130,7 +139,7 @@ Steps:
 1️⃣ Open the profile page in Chrome or Firefox
 2️⃣ Press F12 → Console tab
 3️⃣ Paste the code and hit Enter
-4️⃣ Wait ~32 seconds — tiktok_links.txt will download
+4️⃣ Wait ~32 seconds — a .txt named after the account and date downloads
 
 📌 It only collects links visible while scrolling; large accounts may need more time, and it doesn't guarantee every post.
 ```
@@ -145,4 +154,4 @@ Steps:
 
 ### Reply Code (post as an image or long post)
 
-> نفس الكود أعلاه / Same code as above — identical to `scripts/tiktok_link_extractor.js` (v1.1.1), and `code_tweet.png` is generated from it.
+> نفس الكود أعلاه / Same code as above — identical to `scripts/tiktok_link_extractor.js` (v1.2.0), and `code_tweet.png` is generated from it.
