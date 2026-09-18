@@ -1,10 +1,12 @@
 /**
- * TikTok Link Extractor — Advanced (v1.1.1)
- * ==========================================
+ * TikTok Link Extractor — Advanced (v1.2.0)
+ * =========================================
  * مزايا إضافية / Extra features:
  *   - Smart auto-stop: keeps scrolling until no new posts load (~15s idle).
  *   - 🕒 Publish-time extraction from post ID (first 32 bits = Unix timestamp).
- *   - TXT = plain URLs (yt-dlp batch-ready, no BOM) + CSV = url,created,title.
+ *   - 📝 Caption split into caption / author / sound + the raw alt text.
+ *   - 📁 File names carry the account and the UTC collection time.
+ *   - TXT = plain URLs (yt-dlp batch-ready, no BOM) + CSV for Excel.
  *   - 🛡️ CSV-injection guard: ' prefix for cells starting with = + - @
  *   - Profile-only filtering, post-ID dedupe, caption update-if-empty.
  *
@@ -20,7 +22,7 @@
     return;
   }
 
-  const posts = new Map(); // postId → { url, created, title }
+  const posts = new Map(); // postId → { url, created, caption, author, sound, alt }
 
   const SCROLL_STEP = 1200;
   const ROUND_INTERVAL = 1500;
@@ -30,6 +32,11 @@
   let idleRounds = 0;
   let lastCount = 0;
   let finished = false;
+
+  // file names = account + UTC collection time (no more tiktok_links(2).txt)
+  const runIso = new Date().toISOString();
+  const stamp = `${runIso.slice(0, 10)}_${runIso.slice(11, 16).replace(':', '')}`;
+  const base = `tiktok_${user.slice(1).replace(/[^\w.-]/g, '_')}_${stamp}`;
 
   // First 32 bits of the post ID = Unix seconds (BigInt needed — ID is 19 digits)
   const postTime = (id) => {
@@ -47,13 +54,31 @@
     return `"${s}"`;
   };
 
-  // Caption: thumbnail alt is the real caption; title/aria-label as fallback.
-  // Never use the card container's innerText (it contains view counts like "1.2M").
-  const captionOf = (a) =>
+  // Raw alt text of the thumbnail. Never use the card container's innerText
+  // (it contains view counts like "1.2M").
+  const altOf = (a) =>
     (a.querySelector('img')?.alt ||
       a.getAttribute('title') ||
       a.getAttribute('aria-label') ||
       '').trim();
+
+  // TikTok alt format: "<caption> created by <author> with <sound>".
+  // Split it so the caption column holds the caption only.
+  const parseAlt = (alt) => {
+    const key = 'created by ';
+    const i = alt.lastIndexOf(key);
+    if (i < 0) return { caption: alt, author: '', sound: '', alt };
+    const caption = alt.slice(0, i).trim();
+    const rest = alt.slice(i + key.length);
+    const j = rest.indexOf(' with ');
+    if (j < 0) return { caption, author: rest.trim(), sound: '', alt };
+    return {
+      caption,
+      author: rest.slice(0, j).trim(),
+      sound: rest.slice(j + 6).trim(),
+      alt,
+    };
+  };
 
   const collect = () => {
     document
@@ -62,15 +87,16 @@
         const m = a.href.match(/\/(@[^/?#]+)\/(video|photo)\/(\d+)/);
         if (!m || m[1].toLowerCase() !== user) return;
 
-        const caption = captionOf(a);
+        const alt = altOf(a);
         if (!posts.has(m[3])) {
           posts.set(m[3], {
             url: `https://www.tiktok.com/${m[1]}/${m[2]}/${m[3]}`,
             created: postTime(m[3]),
-            title: caption,
+            ...parseAlt(alt),
           });
-        } else if (!posts.get(m[3]).title && caption) {
-          posts.get(m[3]).title = caption; // backfill captions that load late
+        } else if (!posts.get(m[3]).alt && alt) {
+          // backfill captions that load late
+          Object.assign(posts.get(m[3]), parseAlt(alt));
         }
       });
   };
@@ -97,25 +123,24 @@
       collect(); // final pass — after the last batch has had 2s to load
       const entries = [...posts.values()];
 
-      download(
-        entries.map((e) => e.url).join('\n'),
-        'tiktok_links.txt',
-        'text/plain'
-      );
+      download(entries.map((e) => e.url).join('\n'), `${base}.txt`, 'text/plain');
 
       // stagger the 2nd file — Chrome may block/ask permission for multiple downloads
       setTimeout(() => {
         const csv = [
-          'url,created,title',
+          'url,created,caption,author,sound,alt_raw',
           ...entries.map((e) =>
-            [csvCell(e.url), csvCell(e.created), csvCell(e.title)].join(',')
+            [e.url, e.created, e.caption, e.author, e.sound, e.alt]
+              .map(csvCell)
+              .join(',')
           ),
         ].join('\n');
-        download(csv, 'tiktok_links.csv', 'text/csv', true);
+        download(csv, `${base}.csv`, 'text/csv', true);
       }, 800);
 
       console.log(`✅ ${reason}`);
-      console.log(`📊 ${entries.length} posts → tiktok_links.txt + tiktok_links.csv`);
+      console.log(`📊 ${entries.length} posts → ${base}.txt + ${base}.csv`);
+      console.log(`🕒 Collected at ${runIso} (UTC) — times in the CSV are UTC too.`);
     }, 2000);
   };
 

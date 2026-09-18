@@ -1,10 +1,13 @@
 /**
- * TikTok Link Extractor — Basic (v1.1.1)
+ * TikTok Link Extractor — Basic (v1.2.0)
  * ======================================
  * Usage: open a public profile → F12 → Console → paste → Enter,
- *        then wait ~32 seconds — tiktok_links.txt downloads automatically.
+ *        then wait ~32 seconds — the .txt file downloads automatically.
  *
  * Output: plain URLs, one per line — ready as a yt-dlp batch file.
+ *         The file name carries the account and the UTC collection time,
+ *         e.g. tiktok_username_2026-09-18_1305.txt
+ *
  * Notice: public data, educational/research use only.
  * Arabic guide: README.ar.md
  */
@@ -15,7 +18,13 @@
     return;
   }
 
-  const posts = new Map(); // postId → url (dedupe by post ID, merge URL variants)
+  const posts = new Map(); // postId → url (dedupe by ID, merge URL variants)
+
+  // file name = account + UTC collection time (no more tiktok_links(2).txt)
+  const iso = new Date().toISOString();
+  const stamp = `${iso.slice(0, 10)}_${iso.slice(11, 16).replace(':', '')}`;
+  const safeUser = user.slice(1).replace(/[^\w.-]/g, '_');
+  const fileName = `tiktok_${safeUser}_${stamp}.txt`;
 
   const collect = () => {
     document
@@ -45,11 +54,11 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'tiktok_links.txt';
+      a.download = fileName;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-      console.log(`Collected ${posts.size} posts → tiktok_links.txt`);
+      console.log(`Collected ${posts.size} posts → ${fileName}`);
     }, 2000);
   }, 30000);
 })();
